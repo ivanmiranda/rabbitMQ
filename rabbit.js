@@ -2,7 +2,7 @@ var amqp = require('amqplib/callback_api');
 
 var amqpConn = null;
 function start() {
-  amqp.connect("amqp://kicgmglo:b-Oo-rirAvxrmUVPXtTXjCcpmrTHh3Hn@reindeer.rmq.cloudamqp.com/kicgmglo?heartbeat=60", function(err, conn) {
+  amqp.connect("amqp://la.url.de.tu.servicio.rabbit/kicgmglo?heartbeat=60", function(err, conn) {
     if (err) {
       console.error("[RABBIT]", err.message);
       return setTimeout(start, 1000);
