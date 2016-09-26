@@ -1,24 +1,23 @@
 var amqp = require('amqplib/callback_api');
 
-// if the connection is closed or fails to be established at all, we will reconnect
 var amqpConn = null;
 function start() {
   amqp.connect("amqp://kicgmglo:b-Oo-rirAvxrmUVPXtTXjCcpmrTHh3Hn@reindeer.rmq.cloudamqp.com/kicgmglo?heartbeat=60", function(err, conn) {
     if (err) {
-      console.error("[AMQP]", err.message);
+      console.error("[RABBIT]", err.message);
       return setTimeout(start, 1000);
     }
     conn.on("error", function(err) {
-      if (err.message !== "Connection closing") {
-        console.error("[AMQP] conn error", err.message);
+      if (err.message !== "Cerrando") {
+        console.error("[RABBIT] error de conexion", err.message);
       }
     });
     conn.on("close", function() {
-      console.error("[AMQP] reconnecting");
+      console.error("[RABBIT] reconectar");
       return setTimeout(start, 1000);
     });
 
-    console.log("[AMQP] connected");
+    console.log("[RABBIT] conectada");
     amqpConn = conn;
 
     whenConnected();
@@ -36,48 +35,46 @@ function startPublisher() {
   amqpConn.createConfirmChannel(function(err, ch) {
     if (closeOnErr(err)) return;
     ch.on("error", function(err) {
-      console.error("[AMQP] channel error", err.message);
+      console.error("[RABBIT] error en canal", err.message);
     });
     ch.on("close", function() {
-      console.log("[AMQP] channel closed");
+      console.log("[RABBIT] canal cerrado");
     });
 
     pubChannel = ch;
   });
 }
 
-// method to publish a message, will queue messages internally if the connection is down and resend later
 function publish(exchange, routingKey, content) {
   try {
     pubChannel.publish(exchange, routingKey, content, { persistent: true },
                        function(err, ok) {
                          if (err) {
-                           console.error("[AMQP] publish", err);
+                           console.error("[RABBIT] publicar", err);
                            offlinePubQueue.push([exchange, routingKey, content]);
                            pubChannel.connection.close();
                          }
                        });
   } catch (e) {
-    console.error("[AMQP] publish", e.message);
+    console.error("[RABBIT] publicar", e.message);
     offlinePubQueue.push([exchange, routingKey, content]);
   }
 }
 
-// A worker that acks messages only if processed succesfully
 function startWorker() {
   amqpConn.createChannel(function(err, ch) {
     if (closeOnErr(err)) return;
     ch.on("error", function(err) {
-      console.error("[AMQP] channel error", err.message);
+      console.error("[RABBIT] error en canal", err.message);
     });
     ch.on("close", function() {
-      console.log("[AMQP] channel closed");
+      console.log("[RABBIT] canal cerrado");
     });
     ch.prefetch(10);
-    ch.assertQueue("jobs", { durable: true }, function(err, _ok) {
+    ch.assertQueue("coladefault", { durable: true }, function(err, _ok) {
       if (closeOnErr(err)) return;
-      ch.consume("jobs", processMsg, { noAck: false });
-      console.log("Worker is started");
+      ch.consume("coladefault", processMsg, { noAck: false });
+      console.log("Cola iniciada");
     });
 
     function processMsg(msg) {
@@ -102,7 +99,7 @@ function work(msg, cb) {
 
 function closeOnErr(err) {
   if (!err) return false;
-  console.error("[AMQP] error", err);
+  console.error("[RABBIT] error", err);
   amqpConn.close();
   return true;
 }
@@ -112,8 +109,12 @@ const PORT=8080;
 function handleRequest(request, response){
 	var url = require('url');
 	var url_parts = url.parse(request.url, true);
-    response.end('Publicando ' + url_parts.query.funcion);
-    publish("", "jobs", new Buffer(JSON.stringify(url_parts.query)));
+	if (url_parts.query.length > 0) {
+	    publish("", "coladefault", new Buffer(JSON.stringify(url_parts.query)));
+		response.end('Publicando ' + url_parts.query.funcion);
+	} else {
+		response.end('No se definio la funcion a invocar');
+	}
 }
 var server = http.createServer(handleRequest);
 server.listen(PORT, function(){
